@@ -1,0 +1,159 @@
+#!/usr/bin/python
+#
+# Copyright (C) 2020 Olaf Kirch
+#
+# For the time being, experimenting with a couple of sensors and displaying
+# sensor data
+#
+
+from time import sleep, ctime
+from math import log
+import datetime
+
+class SensorBase:
+	def clear(self):
+		self.timestamp = None
+		self.temperature = None
+		self.humidity = None
+		self.pressure = None
+		self.dewpoint = None
+
+	def update(self):
+		# Read data from the sensor
+		self.sense()
+
+		if self.timestamp is None:
+			self.timestamp = datetime.datetime.now()
+
+		self.dewpoint = self.dewPoint()
+
+	def dewPoint(self):
+		t = self.temperature
+		rh = self.humidity
+		if t < -65 or t > 60:
+			return 0
+
+		if rh < 0 or rh > 100:
+			return 0
+
+		if t > 0:
+			k2 = 17.62;
+			k3 = 243.12;
+		else:
+			k2 = 22.46;
+			k3 = 272.62;
+
+		return k3 * ((k2 * t)/(k3 + t) + log(rh/100))/((k2 * k3)/(k3 + t) - log(rh / 100));
+
+
+class SensorSenseHat(SensorBase):
+	def __init__(self):
+		from sense_hat import SenseHat
+
+		self.hat = SenseHat()
+		self.clear()
+
+	def sense(self):
+		s = self.hat
+		self.temperature = s.get_temperature_from_pressure()
+		self.humidity = s.get_humidity()
+		self.pressure = s.get_pressure()
+
+class SensorDHT22(SensorBase):
+	def __init__(self, pin = 4):
+		import Adafruit_DHT
+
+		self.type = Adafruit_DHT.DHT22
+		self.pin = pin
+		self.clear()
+
+	def sense(self):
+		import Adafruit_DHT
+
+		self.humidity, self.temperature = Adafruit_DHT.read_retry(self.type, self.pin)
+
+class SensorBME280(SensorBase):
+	def __init__(self, bus = 1, address = 0x77):
+		import smbus2
+		import bme280
+
+		self._address = address;
+		self._bus = smbus2.SMBus(bus)
+
+		# Load the calibration params
+		self._params = bme280.load_calibration_params(self._bus, self._address)
+
+	def sense(self):
+		import bme280
+
+		data = bme280.sample(self._bus, self._address, self._params)
+		self.timestamp = data.timestamp
+		self.temperature = data.temperature
+		self.pressure = data.pressure
+		self.humidity = data.humidity
+
+class SenseDataSink(object):
+	def __init__(self):
+		pass
+
+class StdoutLogger(SenseDataSink):
+	def render(self, sensor):
+		when = sensor.timestamp.ctime()
+		if sensor.pressure is not None:
+			print("%s: temp: %3.2f rh: %3.1f%% dew point: %.2f pressure %.0f" % (when, sensor.temperature, sensor.humidity, sensor.dewpoint, sensor.pressure))
+		else:
+			print("%s: temp: %3.2f rh: %3.1f%% dew point: %.2f" % (when, sensor.temperature, sensor.humidity, sensor.dewpoint))
+
+
+class SparkfunOLED(SenseDataSink):
+	def __init__(self):
+		import qwiic_micro_oled
+
+		self._oled = qwiic_micro_oled.QwiicMicroOled()
+		self._oled.set_font_type(1)
+		self._oled.clear(self._oled.ALL)
+		self._oled.clear(self._oled.PAGE)
+		self._oled.begin()
+
+		self._ypos = 0;
+		self._lineHeight = self._oled.get_font_height() + 1
+
+	def render(self, sensor):
+		self.home()
+		self.write("T  %.2f C" % sensor.temperature)
+		self.write("rH %.2f %%" % sensor.humidity)
+		self.write("Td %.2f C" % sensor.dewpoint)
+		self.flush()
+
+	def clear(self):
+		self._oled.clear(self._oled.ALL)
+		self.home()
+
+	def home(self):
+		self._ypos = 0
+
+	def write(self, line):
+		import qwiic_micro_oled
+
+		self._oled.set_cursor(0, (self._ypos + 1) * self._lineHeight)
+
+		fn = getattr(self._oled, "print")
+		fn(line)
+
+		self._ypos += 1
+
+	def flush(self):
+		self._oled.display()
+
+sensor = SensorBME280()
+
+dataSinks = []
+dataSinks.append(StdoutLogger())
+dataSinks.append(SparkfunOLED())
+
+while True:
+	sensor.update()
+	for sink in dataSinks:
+		sink.render(sensor)
+	sleep(5)
+
