@@ -11,6 +11,10 @@ from math import log
 import datetime
 
 class SensorBase:
+	def __init__(self, name):
+		self.name = name
+		self.clear()
+
 	def clear(self):
 		self.timestamp = None
 		self.temperature = None
@@ -47,11 +51,12 @@ class SensorBase:
 
 
 class SensorSenseHat(SensorBase):
-	def __init__(self):
+	def __init__(self, name):
 		from sense_hat import SenseHat
 
+		super(SensorSenseHat, self).__init__(name)
+
 		self.hat = SenseHat()
-		self.clear()
 
 	def sense(self):
 		s = self.hat
@@ -60,12 +65,13 @@ class SensorSenseHat(SensorBase):
 		self.pressure = s.get_pressure()
 
 class SensorDHT22(SensorBase):
-	def __init__(self, pin = 4):
+	def __init__(self, name, pin = 4):
 		import Adafruit_DHT
+
+		super(SensorDHT22, self).__init__(name)
 
 		self.type = Adafruit_DHT.DHT22
 		self.pin = pin
-		self.clear()
 
 	def sense(self):
 		import Adafruit_DHT
@@ -73,10 +79,12 @@ class SensorDHT22(SensorBase):
 		self.humidity, self.temperature = Adafruit_DHT.read_retry(self.type, self.pin)
 
 class SensorBME280(SensorBase):
-	def __init__(self, bus = 1, address = 0x77):
+	def __init__(self, name, bus = 1, address = 0x77):
 		import smbus2
 		import bme280.bme280_i2c
 		import bme280.bme280
+
+		super(SensorBME280, self).__init__(name)
 
 		self._address = address;
 		bme280.bme280_i2c.set_default_i2c_address(self._address)
@@ -85,7 +93,6 @@ class SensorBME280(SensorBase):
 		bme280.bme280_i2c.set_default_bus(bus)
 
 		bme280.bme280.setup()
-		self.clear()
 
 	def sense(self):
 		import bme280.bme280
@@ -96,15 +103,15 @@ class SensorBME280(SensorBase):
 		self.humidity = data.humidity
 
 class SensorMS8607(SensorBase):
-	def __init__(self, bus = None, address = None):
+	def __init__(self, name, bus = None, address = None):
 		import board
 		import busio
 		from adafruit_ms8607 import MS8607
 
+		super(SensorMS8607, self).__init__(name)
+
 		i2c = busio.I2C(board.SCL, board.SDA)
 		self._sensor = MS8607(i2c)
-
-		self.clear()
 
 	def sense(self):
 		s = self._sensor
@@ -120,9 +127,9 @@ class StdoutLogger(SenseDataSink):
 	def render(self, sensor):
 		when = sensor.timestamp.ctime()
 		if sensor.pressure is not None:
-			print("%s: temp: %3.2f rh: %3.1f%% dew point: %.2f pressure %.0f" % (when, sensor.temperature, sensor.humidity, sensor.dewpoint, sensor.pressure))
+			print("%s: %s temp: %3.2f rh: %3.1f%% dew point: %.2f pressure %.0f" % (when, sensor.name, sensor.temperature, sensor.humidity, sensor.dewpoint, sensor.pressure))
 		else:
-			print("%s: temp: %3.2f rh: %3.1f%% dew point: %.2f" % (when, sensor.temperature, sensor.humidity, sensor.dewpoint))
+			print("%s: %s temp: %3.2f rh: %3.1f%% dew point: %.2f" % (when, sensor.name, sensor.temperature, sensor.humidity, sensor.dewpoint))
 
 
 class SparkfunOLED(SenseDataSink):
@@ -165,15 +172,18 @@ class SparkfunOLED(SenseDataSink):
 	def flush(self):
 		self._oled.display()
 
-sensor = SensorBME280()
+sensors = []
+sensors.append(SensorBME280("bme280"))
+sensors.append(SensorMS8607("ms8607"))
 
 dataSinks = []
 dataSinks.append(StdoutLogger())
 dataSinks.append(SparkfunOLED())
 
 while True:
-	sensor.update()
-	for sink in dataSinks:
-		sink.render(sensor)
+	for sensor in sensors:
+		sensor.update()
+		for sink in dataSinks:
+			sink.render(sensor)
 	sleep(5)
 
