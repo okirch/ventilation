@@ -123,19 +123,23 @@ class SenseDataSink(object):
 	def __init__(self, name):
 		self.name = name
 
-class StdoutLogger(SenseDataSink):
+class Logger(SenseDataSink):
+	def __init__(self, name):
+		super(Logger, self).__init__(name)
+
+class StdoutLogger(Logger):
 	def __init__(self, name):
 		super(StdoutLogger, self).__init__(name)
 
-	def render(self, sensor):
-		when = sensor.timestamp.ctime()
-		if sensor.pressure is not None:
-			print("%s: %s temp: %3.2f rh: %3.1f%% dew point: %.2f pressure %.0f" % (when, sensor.name, sensor.temperature, sensor.humidity, sensor.dewpoint, sensor.pressure))
-		else:
-			print("%s: %s temp: %3.2f rh: %3.1f%% dew point: %.2f" % (when, sensor.name, sensor.temperature, sensor.humidity, sensor.dewpoint))
+	def writeMessage(self, msg):
+		print(msg)
 
 
-class SparkfunOLED(SenseDataSink):
+class SmallDisplay(SenseDataSink):
+	def __init__(self, name):
+		super(SmallDisplay, self).__init__(name)
+
+class SparkfunOLED(SmallDisplay):
 	def __init__(self, name):
 		import qwiic_micro_oled
 
@@ -149,13 +153,6 @@ class SparkfunOLED(SenseDataSink):
 
 		self._ypos = 0;
 		self._lineHeight = self._oled.get_font_height() + 1
-
-	def render(self, sensor):
-		self.home()
-		self.write("T  %.2f C" % sensor.temperature)
-		self.write("rH %.2f %%" % sensor.humidity)
-		self.write("Td %.2f C" % sensor.dewpoint)
-		self.flush()
 
 	def clear(self):
 		self._oled.clear(self._oled.ALL)
@@ -188,24 +185,43 @@ class LogRenderer(Renderer):
 	def __init__(self, sensors, sink):
 		super(LogRenderer, self).__init__()
 
+		assert(isinstance(sink, Logger))
+
 		# The sensors argument may be an iterator
 		self._sensors = list(sensors)
 		self._sink = sink
 
 	def render(self):
-		for s in self._sensors:
-			self._sink.render(s)
+		for sensor in self._sensors:
+			self._sink.writeMessage(self.logMessage(sensor))
+
+	def logMessage(self, sensor):
+		when = sensor.timestamp.ctime()
+		msg = "%s: %s temp: %3.2f rh: %3.1f%% dew point: %.2f" % (when, sensor.name, sensor.temperature, sensor.humidity, sensor.dewpoint)
+		if sensor.pressure is not None:
+			msg += " pressure %.0f" % (sensor.pressure)
+
+		return msg
 
 class SmallDisplayRenderer(Renderer):
 	def __init__(self, sensor, sink):
 		super(SmallDisplayRenderer, self).__init__()
 
+		assert(isinstance(sink, SmallDisplay))
+
 		self._sensor = sensor
 		self._sink = sink
 
 	def render(self):
-		# print("rendering %s to %s" % (self._sensor.name, self._sink.name))
-		self._sink.render(self._sensor)
+		sensor = self._sensor
+		sink = self._sink
+
+		# print("rendering %s to %s" % (sensor.name, sink.name))
+		sink.home()
+		sink.write("T  %.2f C" % sensor.temperature)
+		sink.write("rH %.2f %%" % sensor.humidity)
+		sink.write("Td %.2f C" % sensor.dewpoint)
+		sink.flush()
 
 
 class ObjectRegistry(object):
@@ -252,8 +268,6 @@ dataSinks = ObjectRegistry()
 dataSinks.add(StdoutLogger("logger"))
 dataSinks.add(SparkfunOLED("display"))
 
-# If we have different renderer classes, we can do away with the render() method
-# inside the data sink
 renderers = []
 renderers.append(
 	LogRenderer(sensors.values(), dataSinks.get("logger"))
