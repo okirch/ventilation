@@ -75,19 +75,22 @@ class SensorDHT22(SensorBase):
 class SensorBME280(SensorBase):
 	def __init__(self, bus = 1, address = 0x77):
 		import smbus2
-		import bme280
+		import bme280.bme280_i2c
+		import bme280.bme280
 
 		self._address = address;
-		self._bus = smbus2.SMBus(bus)
+		bme280.bme280_i2c.set_default_i2c_address(self._address)
 
-		# Load the calibration params
-		self._params = bme280.load_calibration_params(self._bus, self._address)
+		self._bus = bus
+		bme280.bme280_i2c.set_default_bus(bus)
+
+		bme280.bme280.setup()
+		self.clear()
 
 	def sense(self):
-		import bme280
+		import bme280.bme280
 
-		data = bme280.sample(self._bus, self._address, self._params)
-		self.timestamp = data.timestamp
+		data = bme280.bme280.read_all()
 		self.temperature = data.temperature
 		self.pressure = data.pressure
 		self.humidity = data.humidity
