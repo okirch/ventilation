@@ -120,10 +120,13 @@ class SensorMS8607(SensorBase):
 		self.humidity = s.relative_humidity
 
 class SenseDataSink(object):
-	def __init__(self):
-		pass
+	def __init__(self, name):
+		self.name = name
 
 class StdoutLogger(SenseDataSink):
+	def __init__(self, name):
+		super(StdoutLogger, self).__init__(name)
+
 	def render(self, sensor):
 		when = sensor.timestamp.ctime()
 		if sensor.pressure is not None:
@@ -133,8 +136,10 @@ class StdoutLogger(SenseDataSink):
 
 
 class SparkfunOLED(SenseDataSink):
-	def __init__(self):
+	def __init__(self, name):
 		import qwiic_micro_oled
+
+		super(SparkfunOLED, self).__init__(name)
 
 		self._oled = qwiic_micro_oled.QwiicMicroOled()
 		self._oled.set_font_type(1)
@@ -204,15 +209,15 @@ sensors = SensorRegistry()
 sensors.add(SensorBME280("bme280"))
 sensors.add(SensorMS8607("ms8607"))
 
-dataSinks = []
-dataSinks.append(StdoutLogger())
-dataSinks.append(SparkfunOLED())
+dataSinks = ObjectRegistry()
+dataSinks.add(StdoutLogger("logger"))
+dataSinks.add(SparkfunOLED("display"))
 
 while True:
 	sensors.updateAll()
 
 	for sensor in sensors.values():
-		for sink in dataSinks:
+		for sink in dataSinks.values():
 			sink.render(sensor)
 	sleep(5)
 
