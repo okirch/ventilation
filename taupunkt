@@ -95,6 +95,23 @@ class SensorBME280(SensorBase):
 		self.pressure = data.pressure
 		self.humidity = data.humidity
 
+class SensorMS8607(SensorBase):
+	def __init__(self, bus = None, address = None):
+		import board
+		import busio
+		from adafruit_ms8607 import MS8607
+
+		i2c = busio.I2C(board.SCL, board.SDA)
+		self._sensor = MS8607(i2c)
+
+		self.clear()
+
+	def sense(self):
+		s = self._sensor
+		self.temperature = s.temperature
+		self.pressure = s.pressure
+		self.humidity = s.relative_humidity
+
 class SenseDataSink(object):
 	def __init__(self):
 		pass
