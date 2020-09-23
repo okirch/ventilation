@@ -177,6 +177,37 @@ class SparkfunOLED(SenseDataSink):
 	def flush(self):
 		self._oled.display()
 
+class Renderer(object):
+	def __init__(self):
+		pass
+
+	def render(self):
+		pass
+
+class LogRenderer(Renderer):
+	def __init__(self, sensors, sink):
+		super(LogRenderer, self).__init__()
+
+		# The sensors argument may be an iterator
+		self._sensors = list(sensors)
+		self._sink = sink
+
+	def render(self):
+		for s in self._sensors:
+			self._sink.render(s)
+
+class SmallDisplayRenderer(Renderer):
+	def __init__(self, sensor, sink):
+		super(SmallDisplayRenderer, self).__init__()
+
+		self._sensor = sensor
+		self._sink = sink
+
+	def render(self):
+		# print("rendering %s to %s" % (self._sensor.name, self._sink.name))
+		self._sink.render(self._sensor)
+
+
 class ObjectRegistry(object):
 	def __init__(self):
 		self.objects = {}
@@ -205,6 +236,14 @@ class SensorRegistry(ObjectRegistry):
 	def updateAll(self):
 		self.invokeAll('update')
 
+class OutputRegistry(ObjectRegistry):
+	def __init__(self):
+		super(OutputRegistry, self).__init__()
+
+class RendererRegistry(ObjectRegistry):
+	def __init__(self):
+		super(RendererRegistry, self).__init__()
+
 sensors = SensorRegistry()
 sensors.add(SensorBME280("bme280"))
 sensors.add(SensorMS8607("ms8607"))
@@ -213,11 +252,21 @@ dataSinks = ObjectRegistry()
 dataSinks.add(StdoutLogger("logger"))
 dataSinks.add(SparkfunOLED("display"))
 
+# If we have different renderer classes, we can do away with the render() method
+# inside the data sink
+renderers = []
+renderers.append(
+	LogRenderer(sensors.values(), dataSinks.get("logger"))
+	)
+renderers.append(
+	SmallDisplayRenderer(sensors.get("ms8607"), dataSinks.get("display"))
+	)
+
+
 while True:
 	sensors.updateAll()
 
-	for sensor in sensors.values():
-		for sink in dataSinks.values():
-			sink.render(sensor)
+	for r in renderers:
+		r.render()
 	sleep(5)
 
