@@ -1,0 +1,7 @@
+pip3 install Adafruit_DHT
+pip3 install bme280
+pip3 install smbus2
+pip3 install smbus
+pip3 install adafruit-circuitpython-ms8607
+pip3 install sense-hat
+pip3 install sparkfun-qwiic-micro-oled
