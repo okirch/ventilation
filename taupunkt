@@ -172,17 +172,46 @@ class SparkfunOLED(SenseDataSink):
 	def flush(self):
 		self._oled.display()
 
-sensors = []
-sensors.append(SensorBME280("bme280"))
-sensors.append(SensorMS8607("ms8607"))
+class ObjectRegistry(object):
+	def __init__(self):
+		self.objects = {}
+
+	def add(self, object, name = None):
+		if name is None:
+			name = object.name
+		assert(self.objects.get(name) is None)
+		self.objects[name] = object
+
+	def get(self, name):
+		return self.objects[name]
+
+	def values(self):
+		return self.objects.values()
+
+	def invokeAll(self, methodName):
+		for obj in self.objects.values():
+			m = getattr(obj, methodName)
+			m()
+
+class SensorRegistry(ObjectRegistry):
+	def __init__(self):
+		super(SensorRegistry, self).__init__()
+
+	def updateAll(self):
+		self.invokeAll('update')
+
+sensors = SensorRegistry()
+sensors.add(SensorBME280("bme280"))
+sensors.add(SensorMS8607("ms8607"))
 
 dataSinks = []
 dataSinks.append(StdoutLogger())
 dataSinks.append(SparkfunOLED())
 
 while True:
-	for sensor in sensors:
-		sensor.update()
+	sensors.updateAll()
+
+	for sensor in sensors.values():
 		for sink in dataSinks:
 			sink.render(sensor)
 	sleep(5)
