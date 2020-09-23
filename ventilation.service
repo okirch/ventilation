@@ -1,0 +1,10 @@
+[Unit]
+Description=ventilation control
+# ConditionPathExists=/etc/rsyncd.conf
+After=network.target
+
+[Service]
+ExecStart=/usr/sbin/taupunkt
+
+[Install]
+WantedBy=multi-user.target
