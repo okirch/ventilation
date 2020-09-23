@@ -13,3 +13,8 @@ install:
 	else \
 		echo "Not installing $(SVCDIR)/$(SVCFILE); unchanged"; \
 	fi
+
+.PHONY: patches
+patches:
+	rm -rf patches
+	git format-patch -o patches origin/master
