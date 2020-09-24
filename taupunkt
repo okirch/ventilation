@@ -80,7 +80,6 @@ class SensorDHT22(SensorBase):
 
 class SensorBME280(SensorBase):
 	def __init__(self, name, bus = 1, address = 0x77):
-		import smbus2
 		import bme280.bme280_i2c
 		import bme280.bme280
 
