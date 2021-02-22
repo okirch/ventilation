@@ -153,6 +153,8 @@ class SparkfunOLED(SmallDisplay):
 		self._ypos = 0;
 		self._lineHeight = self._oled.get_font_height() + 1
 
+		self._hung = False
+
 	def clear(self):
 		self._oled.clear(self._oled.ALL)
 		self.home()
@@ -160,9 +162,32 @@ class SparkfunOLED(SmallDisplay):
 	def home(self):
 		self._ypos = 0
 
-	def write(self, line):
-		import qwiic_micro_oled
 
+	def device_hung(self):
+		if not self._hung:
+			print("Looks like the OLED device is hung... keep trying");
+		self._hung = True
+
+	def device_recovered(self):
+		if self._hung:
+			print("OLED device recovered")
+		self._hung = False
+
+	def do_protected(self, fn):
+		for iter in range(5):
+			try:
+				fn()
+				self.device_recovered()
+
+				return
+			except:
+				if iter == 0 and not self._hung:
+					print("Failed to write line to OLED, retrying")
+				sleep(iter * 0.2)
+
+		self.device_hung()
+
+	def _write(self, line):
 		self._oled.set_cursor(0, (self._ypos + 1) * self._lineHeight)
 
 		fn = getattr(self._oled, "print")
@@ -170,8 +195,14 @@ class SparkfunOLED(SmallDisplay):
 
 		self._ypos += 1
 
-	def flush(self):
+	def write(self, line):
+		self.do_protected(lambda: self._write(line))
+
+	def _flush(self):
 		self._oled.display()
+
+	def flush(self):
+		self.do_protected(lambda: self._flush())
 
 class Renderer(object):
 	def __init__(self):
